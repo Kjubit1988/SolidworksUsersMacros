@@ -1,0 +1,96 @@
+Sub ImportKusovnikToSolidWorks()
+
+    ' Nastavte cestu k Excelovému souboru a listu, kde se nachází kusovník
+    Dim excelFilePath As String
+    Dim excelSheetName As String
+    excelFilePath = "C:\Users\Orsak\Desktop\Pokusná složka\BOM_test.xls"
+    
+
+    ' Připojení k SolidWorks
+    Dim swApp As SldWorks.SldWorks
+    Set swApp = Application.SldWorks
+
+    ' Vytvoření instance Excelu
+    Dim excelApp As Excel.Application
+    Dim Workbook As Excel.Workbook
+    Dim worksheet As Excel.worksheet
+    Set excelApp = New Excel.Application
+    Set Workbook = excelApp.Workbooks.Open(excelFilePath)
+    Set worksheet = Workbook.Sheets(1) ' Použití prvního listu
+
+    ' Nalezení poslední použité řádky v kusovníku
+    Dim lastUsedRow As Long
+    lastUsedRow = worksheet.Cells.SpecialCells(xlCellTypeLastCell).row
+
+    ' Procházení kusovníku a vepisování do vlastnosti PCS pro každou komponentu
+    Dim row As Long
+    For row = 11 To lastUsedRow ' Předpokládáme, že první řádek je hlavička
+        Dim sldprtFilePath As String
+        Dim pcsValue As String
+        Dim kusName As String
+
+        sldprtFilePath = worksheet.Cells(row, 18).Value
+        pcsValue = worksheet.Cells(row, 6).Value
+
+        ' Otevření souboru .sldprt
+        Dim swModel As ModelDoc2
+        Set swModel = swApp.OpenDoc(sldprtFilePath, swDocPART)
+
+        ' Ověření, zda je otevřený dokument typu SolidWorks Part
+        If Not swModel Is Nothing Then
+        ' Pokud je, vepíšeme do vlastnosti PCS
+            Dim swPropMgr As CustomPropertyManager
+            Set swPropMgr = swModel.Extension.CustomPropertyManager("")
+            swPropMgr.Add3 "PCS", swCustomInfoText, pcsValue, swCustomPropertyDeleteAndAdd
+
+            ' Uložení změn a zavření dokumentu
+            swModel.EditRebuild3
+            swModel.Save
+            swApp.CloseDoc swModel.GetTitle
+        End If
+    Next row
+
+    ' Uzavření SolidWorks
+    swApp.ExitApp
+
+    ' Uzavření Excelu
+    Workbook.Close False
+    excelApp.Quit
+
+    ' Uvolnění objektů
+    Set swModel = Nothing
+    Set swApp = Nothing
+    Set swComponent = Nothing
+    Set swPropMgr = Nothing
+    Set worksheet = Nothing
+    Set Workbook = Nothing
+    Set excelApp = Nothing
+
+    MsgBox "Import kusovníku dokončen!", vbInformation, "Hotovo"
+
+End Sub
+
+Function FindComponentByName(swModel As ModelDoc2, componentName As String) As Component2
+    Dim swFeatMgr As FeatureManager
+    Set swFeatMgr = swModel.FeatureManager
+
+    Dim components As Variant
+    components = swModel.GetComponents(True)
+
+    Dim componentObj As Variant
+    For Each componentObj In components
+        Dim swComponent As Component2
+        Set swComponent = componentObj
+        If Not swComponent Is Nothing Then
+            Dim compName As String
+            compName = swComponent.Name2
+            If StrComp(compName, componentName, vbTextCompare) = 0 Then
+                Set FindComponentByName = swComponent
+                Exit Function
+            End If
+        End If
+    Next componentObj
+
+    Set FindComponentByName = Nothing
+End Function
+
